@@ -99,5 +99,4 @@ class MyDriver implements IDriver {
 ```
 
 ## License
-
 MIT
