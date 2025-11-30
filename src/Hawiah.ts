@@ -1,4 +1,5 @@
 import { IDriver, Query, Data } from './interfaces/IDriver';
+import DataLoader from 'dataloader';
 
 /**
  * Hawiah: A lightweight, schema-less database abstraction layer.
@@ -7,6 +8,8 @@ import { IDriver, Query, Data } from './interfaces/IDriver';
 export class Hawiah {
   private driver: IDriver;
   private isConnected: boolean = false;
+  private relations: Map<string, RelationConfig> = new Map();
+  private loaders: Map<string, DataLoader<any, any>> = new Map();
 
   /**
    * Creates a new Hawiah instance.
@@ -648,4 +651,130 @@ export class Hawiah {
   isActive(): boolean {
     return this.isConnected;
   }
+
+
+  /**
+   * Define a relationship with another Hawiah instance
+   * @param name - Relationship name
+   * @param target - Target Hawiah instance
+   * @param localKey - Local field name
+   * @param foreignKey - Foreign field name
+   * @param type - Relationship type ('one' or 'many')
+   */
+  relation(name: string, target: Hawiah, localKey: string, foreignKey: string, type: 'one' | 'many' = 'many'): this {
+    this.relations.set(name, { target, localKey, foreignKey, type });
+    return this;
+  }
+
+  /**
+   * Get records with populated relationships
+   * @param query - Query filter
+   * @param relations - Relationship names to populate
+   */
+  async getWith(query: Query = {}, ...relations: string[]): Promise<Data[]> {
+    this.ensureConnected();
+    const records = await this.driver.get(query);
+    
+    if (relations.length === 0 || records.length === 0) {
+      return records;
+    }
+
+    for (const relationName of relations) {
+      await this.loadRelation(records, relationName);
+    }
+
+    return records;
+  }
+
+  /**
+   * Get one record with populated relationships
+   * @param query - Query filter
+   * @param relations - Relationship names to populate
+   */
+  async getOneWith(query: Query, ...relations: string[]): Promise<Data | null> {
+    this.ensureConnected();
+    const record = await this.driver.getOne(query);
+    
+    if (!record || relations.length === 0) {
+      return record;
+    }
+
+    for (const relationName of relations) {
+      await this.loadRelation([record], relationName);
+    }
+
+    return record;
+  }
+
+  /**
+   * Load a relationship for records using DataLoader batching
+   */
+  private async loadRelation(records: Data[], relationName: string): Promise<void> {
+    const relation = this.relations.get(relationName);
+    if (!relation) {
+      throw new Error(`Relation "${relationName}" not defined`);
+    }
+
+    const { target, localKey, foreignKey, type } = relation;
+
+    let loader = this.loaders.get(relationName);
+    if (!loader) {
+      loader = new DataLoader(async (keys: readonly any[]) => {
+        const allRecords = await target.get({});
+        
+        if (type === 'one') {
+          const map = new Map<any, Data>();
+          allRecords.forEach(record => {
+            if (keys.includes(record[foreignKey])) {
+              map.set(record[foreignKey], record);
+            }
+          });
+          return keys.map(key => map.get(key) || null);
+        } else {
+          const map = new Map<any, Data[]>();
+          allRecords.forEach(record => {
+            if (keys.includes(record[foreignKey])) {
+              if (!map.has(record[foreignKey])) {
+                map.set(record[foreignKey], []);
+              }
+              map.get(record[foreignKey])!.push(record);
+            }
+          });
+          return keys.map(key => map.get(key) || []);
+        }
+      }, { cache: true });
+      
+      this.loaders.set(relationName, loader);
+    }
+
+    const keys = records.map(r => r[localKey]).filter(k => k != null);
+    if (keys.length === 0) return;
+
+    const results = await loader.loadMany(keys);
+    
+    let resultIndex = 0;
+    records.forEach(record => {
+      if (record[localKey] != null) {
+        record[relationName] = results[resultIndex];
+        resultIndex++;
+      } else {
+        record[relationName] = type === 'many' ? [] : null;
+      }
+    });
+  }
+
+  /**
+   * Clear relationship cache
+   */
+  clearCache(): void {
+    this.loaders.forEach(loader => loader.clearAll());
+    this.loaders.clear();
+  }
+}
+
+interface RelationConfig {
+  target: Hawiah;
+  localKey: string;
+  foreignKey: string;
+  type: 'one' | 'many';
 }

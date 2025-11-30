@@ -1,13 +1,17 @@
 {
-  "name": "hawiah-core",
-  "version": "0.1.0",
-  "description": "Schema-less database abstraction layer with multiple driver support",
+  "name": "@hawiah/core",
+  "version": "1.0.0",
+  "description": "Core package for Hawiah - Schema-less database abstraction layer with relationships and DataLoader batching",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch",
-    "test": "node test/example.js"
+    "dev": "tsc --watch"
   },
   "keywords": [
     "database",
@@ -20,7 +24,12 @@
     "postgresql",
     "firebase",
     "orm",
-    "query-builder"
+    "query-builder",
+    "relationships",
+    "dataloader",
+    "batching",
+    "n+1",
+    "hawiah"
   ],
   "author": "",
   "license": "MIT",
@@ -28,16 +37,13 @@
     "type": "git",
     "url": "https://github.com/shuruhatik/hawiah-core.git"
   },
-  "homepage": "https://github.com/shuruhatik/hawiah-core#readme",
+  "homepage": "https://hawiah.shuruhatik.com/",
   "bugs": {
     "url": "https://github.com/shuruhatik/hawiah-core/issues"
   },
-  "files": [
-    "dist",
-    "README.md",
-    "INSTALLATION.md",
-    "LICENSE"
-  ],
+  "dependencies": {
+    "dataloader": "^2.2.3"
+  },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "typescript": "^5.0.0"
