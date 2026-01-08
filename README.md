@@ -1,91 +1,124 @@
-# Hawiah Core 🦅
+# @hawiah/core
 
-**The Universal, Hybrid Database Driver & ORM**
+**Hawiah** is a lightweight, schema-less database abstraction layer designed for modern applications. It provides a unified API for various databases while handling advanced features like **Connection Pooling**, **Relationship Management**, and **Data Batching** automatically.
 
-Hawiah abstracts your database layer, allowing you to write code once and run it anywhere. It seamlessly supports SQL, NoSQL, In-Memory, and File-based storage with a unified API.
+## Features
 
----
+- **Unified Interface**: Use MongoDB, SQLite, Firebase, or SQL with the exact same API.
+- **Smart Connection Pooling**: Automatically shares physical connections between instances to maximize performance.
+- **Next.js & Serverless Ready**: Built-in support for HMR (Hot Module Replacement) and Server Components.
+- **Schema Validation**: Optional, simple, and powerful schema definitions.
+- **Zero-Config Relations**: Handle database relationships with ease.
 
-## ✨ Key Features
-
-*   **Universal API:** `insert`, `get`, `update`, `delete` work identically across all drivers.
-*   **Hybrid Schema System (New!):**
-    *   **Optional:** You can go fully schema-less (NoSQL style).
-    *   **Powerful:** Define a Schema to get validation and structure.
-    *   **Hybrid Storage:** On SQL drivers, schemas map to real columns for performance, while keeping a JSON column for flexibility.
-*   **Virtual Relationships:** define relationships between *different* databases/drivers without complex joins.
-*   **Zero Lock-in:** Switch from JSON files to PostgreSQL in seconds.
-
----
-
-## 📦 Installation
+## Installation
 
 ```bash
 npm install @hawiah/core
-# Install a driver:
-npm install @hawiah/sqlite 
-# or @hawiah/postgres, @hawiah/mongo, etc.
 ```
 
-## 🚀 Quick Start
+Then install the driver of your choice:
 
-### 1. Schema-Less (Flexible Mode)
-Perfect for prototyping or pure NoSQL usage.
-
-```javascript
-const { Hawiah } = require('@hawiah/core');
-const { SQLiteDriver } = require('@hawiah/sqlite');
-
-const db = new Hawiah({ 
-    driver: new SQLiteDriver('mydb.sqlite') 
-});
-
-await db.connect();
-await db.insert({ title: 'My Post', views: 100 }); // Just works!
+```bash
+npm install @hawiah/mongo
+# OR
+npm install @hawiah/sqlite
+# OR
+npm install @hawiah/firebase
 ```
 
-### 2. With Schema (Structured Mode)
-Get validation and SQL performance where needed.
+## Usage Examples
+
+Hawiah automatically manages connections. You can create as many instances as you need; if they share the same configuration, they will share the same physical connection.
+
+### 1. MongoDB
 
 ```javascript
-const { Hawiah, Schema, DataTypes } = require('@hawiah/core');
-const { PostgreSQLDriver } = require('@hawiah/postgres');
-
-// Define Schema (Optional)
-const userSchema = new Schema({
-    username: { type: DataTypes.STRING, required: true },
-    email:    { type: DataTypes.EMAIL },
-    data:     { type: DataTypes.JSON } // Flexible JSON field
-});
+import { Hawiah } from '@hawiah/core';
+import { MongoDriver } from '@hawiah/mongo';
 
 const db = new Hawiah({
-    driver: new PostgreSQLDriver({ /* config */, tableName: 'users' }),
-    schema: userSchema
+  driver: MongoDriver,
+  config: { 
+    uri: 'mongodb://localhost:27017', 
+    dbName: 'my_project',
+    collectionName: 'users' // <--- Collection 1
+  }
 });
 
-// Enforces structure & creates real SQL columns
-await db.insert({ username: 'Ali' }); 
+const posts = new Hawiah({
+  driver: MongoDriver,
+  config: { 
+    uri: 'mongodb://localhost:27017', 
+    dbName: 'my_project',
+    collectionName: 'posts' // <--- Collection 2 (Shares connection with users)
+  }
+});
+
+await db.connect(); // Orchestrates the connection for all sharing instances
 ```
 
----
+### 2. SQLite
 
-## 📚 Drivers
+```javascript
+import { Hawiah } from '@hawiah/core';
+import { SqliteDriver } from '@hawiah/sqlite';
 
-| Driver | Package | Mode |
-| :--- | :--- | :--- |
-| **SQLite** | `@hawiah/sqlite` | Hybrid (SQL + JSON) |
-| **PostgreSQL**| `@hawiah/postgres`| Hybrid (SQL + JSON) |
-| **MySQL** | `@hawiah/mysql` | Hybrid (SQL + JSON) |
-| **MongoDB** | `@hawiah/mongo` | Virtual Schema |
-| **Firebase** | `@hawiah/firebase`| Virtual Schema |
-| **Local** | `@hawiah/local` | JSON/YAML Files |
+const users = new Hawiah({
+  driver: SqliteDriver,
+  config: { 
+    filename: './database.sqlite', // <--- Physical File
+    table: 'users'
+  }
+});
 
----
+const logs = new Hawiah({
+  driver: SqliteDriver,
+  config: { 
+    filename: './database.sqlite', // <--- Same Config = Same Connection
+    table: 'logs'
+  }
+});
+```
 
-## 📖 Documentation
+### 3. Firebase (Firestore)
 
-For full details on the advanced Schema system and Relationships, check out the [Full Guide](https://github.com/Shuruhatik/hawiah-core/blob/main/HAWIAH_GUIDE.md).
+```javascript
+import { Hawiah } from '@hawiah/core';
+import { FirebaseDriver } from '@hawiah/firebase';
 
----
+const firebaseConfig = {
+  apiKey: "AIzaSy...",
+  projectId: "my-app",
+  // ...
+};
 
-**License:** MIT
+const profiles = new Hawiah({
+  driver: FirebaseDriver,
+  config: { 
+    firebaseConfig: firebaseConfig,
+    collectionName: 'profiles'
+  }
+});
+```
+
+## Next.js 16+ Support
+
+If you are using **Next.js**, use the `HawiahNext` class. It ensures that your database connections persist across Hot Module Reloads (HMR) to prevent "Too Many Connections" errors during development.
+
+```typescript
+// lib/db.ts
+import { HawiahNext } from '@hawiah/core';
+import { MongoDriver } from '@hawiah/mongo';
+
+export const dbEvents = new HawiahNext({
+  driver: MongoDriver,
+  config: { 
+    uri: process.env.MONGO_URI, 
+    collectionName: 'events' 
+  }
+});
+```
+
+## License
+
+MIT
