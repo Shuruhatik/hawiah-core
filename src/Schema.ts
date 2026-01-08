@@ -39,6 +39,9 @@ export interface SchemaDefinition {
     [key: string]: SchemaField | SchemaType;
 }
 
+/**
+ * Ensures data integrity by validating input against a defined structure.
+ */
 export class Schema {
     private definition: SchemaDefinition;
 
@@ -47,7 +50,7 @@ export class Schema {
     }
 
     /**
-     * returns the schema definition
+     * Returns the raw schema definition.
      */
     getDefinition(): SchemaDefinition {
         return this.definition;
@@ -55,10 +58,14 @@ export class Schema {
 
     /**
      * Validates and processes the data against the schema.
-     * Throws an error if validation fails.
-     * Returns the processed data (e.g. including defaults).
-     * @param data - The data to validate
-     * @param isPartial - If true, ignores "required" checks (useful for updates)
+     * - Applies default values.
+     * - Checks required fields (unless isPartial is true).
+     * - Validates data types.
+     *
+     * @param data The input data object.
+     * @param isPartial If true, skips 'required' checks (useful for updates).
+     * @returns The validated (and possibly modified) data object.
+     * @throws Error if validation fails.
      */
     validate(data: any, isPartial: boolean = false): any {
         const validatedData: any = { ...data };
@@ -66,29 +73,24 @@ export class Schema {
         for (const key in this.definition) {
             let rule = this.definition[key];
 
-            // Normalize rule if it's just a type string
             if (typeof rule === 'string') {
                 rule = { type: rule };
             }
 
             let value = validatedData[key];
 
-            // specific check for handling "id" vs "_id" could vary, but let's stick to schema keys
-
-            // Apply default if undefined (only if not partial, OR if partial and field is undefined but we want defaults?
-            // Usually defaults are for creation. Let's skip defaults on partial update unless specifically needed.
-            // For simplicity: skip defaults on partial if value is missing)
+            // Apply default value if missing and not in partial mode
             if (!isPartial && value === undefined && rule.default !== undefined) {
                 value = rule.default;
                 validatedData[key] = value;
             }
 
-            // Check required (only if not partial)
+            // Check required fields
             if (!isPartial && rule.required && (value === undefined || value === null)) {
                 throw new Error(`Validation Error: Field "${key}" is required.`);
             }
 
-            // Type check (if value is present)
+            // Validate Type
             if (value !== undefined && value !== null && rule.type !== 'any') {
                 if (!this.checkType(value, rule.type)) {
                     throw new Error(`Validation Error: Field "${key}" expected type ${rule.type}.`);

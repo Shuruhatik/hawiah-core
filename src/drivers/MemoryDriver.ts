@@ -1,23 +1,52 @@
 import { IDriver, Query, Data } from '../interfaces/IDriver';
 
+/**
+ * MemoryDriver: A simple in-memory database driver for testing.
+ * Supports shared data (Pooling) via references.
+ */
 export class MemoryDriver implements IDriver {
-  private data: Data[] = [];
-  private idCounter: number = 1;
-  dbType: 'sql' | 'nosql' = 'nosql';
+  private data: Data[];
+  private idCounter: { value: number };
+  private connected: boolean = false;
+  private collectionName: string;
+  dbType: 'nosql' = 'nosql';
+
+  constructor(options: any = {}) {
+    this.collectionName = options.collectionName || 'default';
+    this.data = options.data || [];
+    this.idCounter = options.idCounter || { value: 1 };
+  }
 
   async connect(): Promise<void> {
-    this.data = [];
-    this.idCounter = 1;
+    this.connected = true;
   }
 
   async disconnect(): Promise<void> {
-    this.data = [];
+    this.connected = false;
+  }
+
+  isConnected(): boolean {
+    return this.connected;
+  }
+
+  /**
+   * Returns a new instance for a different collection while sharing the same data array.
+   */
+  table(name: string): IDriver {
+    const newDriver = new MemoryDriver({
+      collectionName: name,
+      data: this.data,
+      idCounter: this.idCounter
+    });
+    newDriver.connected = this.connected;
+    return newDriver;
   }
 
   async set(data: Data): Promise<Data> {
     const record = {
-      _id: this.idCounter++,
+      _id: this.idCounter.value++,
       ...data,
+      __col__: this.collectionName,
       _createdAt: new Date().toISOString(),
     };
     this.data.push(record);
@@ -25,70 +54,52 @@ export class MemoryDriver implements IDriver {
   }
 
   async get(query: Query): Promise<Data[]> {
-    return this.data.filter(record => this.matches(record, query));
+    return this.data.filter(r => r.__col__ === this.collectionName && this.matches(r, query));
   }
 
   async getOne(query: Query): Promise<Data | null> {
-    const record = this.data.find(record => this.matches(record, query));
+    const record = this.data.find(r => r.__col__ === this.collectionName && this.matches(r, query));
     return record || null;
   }
 
   async update(query: Query, data: Data): Promise<number> {
     let count = 0;
-    this.data = this.data.map(record => {
-      if (this.matches(record, query)) {
+    this.data.forEach((r, i) => {
+      if (r.__col__ === this.collectionName && this.matches(r, query)) {
         count++;
-        return {
-          ...record,
-          ...data,
-          _updatedAt: new Date().toISOString(),
-        };
+        this.data[i] = { ...r, ...data, _updatedAt: new Date().toISOString() };
       }
-      return record;
     });
     return count;
   }
 
   async delete(query: Query): Promise<number> {
-    const initialLength = this.data.length;
-    this.data = this.data.filter(record => !this.matches(record, query));
-    return initialLength - this.data.length;
+    const initialLen = this.data.length;
+    this.data = this.data.filter(r => !(r.__col__ === this.collectionName && this.matches(r, query)));
+    return initialLen - this.data.length;
   }
 
   async exists(query: Query): Promise<boolean> {
-    return this.data.some(record => this.matches(record, query));
+    return this.data.some(r => r.__col__ === this.collectionName && this.matches(r, query));
   }
 
   async count(query: Query): Promise<number> {
-    return this.data.filter(record => this.matches(record, query)).length;
+    return this.get(query).then(res => res.length);
   }
 
   private matches(record: Data, query: Query): boolean {
-    if (Object.keys(query).length === 0) {
-      return true;
-    }
-
+    if (Object.keys(query).length === 0) return true;
     return Object.keys(query).every(key => {
-      const queryValue = query[key];
-      const recordValue = record[key];
-
-      if (typeof queryValue === 'object' && queryValue !== null) {
-        if (typeof recordValue === 'object' && recordValue !== null) {
-          return this.matches(recordValue, queryValue);
-        }
-        return false;
+      const qVal = query[key];
+      const rVal = record[key];
+      if (typeof qVal === 'object' && qVal !== null && typeof rVal === 'object' && rVal !== null) {
+        return this.matches(rVal, qVal);
       }
-
-      return recordValue === queryValue;
+      return rVal === qVal;
     });
   }
 
-  async getAll(): Promise<Data[]> {
-    return [...this.data];
-  }
-
   async clear(): Promise<void> {
-    this.data = [];
-    this.idCounter = 1;
+    this.data = this.data.filter(r => r.__col__ !== this.collectionName);
   }
 }

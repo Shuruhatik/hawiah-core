@@ -1,88 +1,94 @@
 /**
- * Query interface for filtering data
+ * Query interface for filtering and selecting data
  */
 export interface Query {
   [key: string]: any;
 }
 
 /**
- * Data interface for storing information
+ * Generic data interface representing a database record
  */
 export interface Data {
   [key: string]: any;
 }
 
 /**
- * Driver interface that all database drivers must implement
+ * The standard interface that all database drivers must implement.
+ * Supports connection pooling, CRUD operations, and schema validation.
  */
 export interface IDriver {
   /**
-   * Connect to the database
-   */
-  connect(): Promise<void>;
-
-  /**
-   * Disconnect from the database
-   */
-  disconnect(): Promise<void>;
-
-  /**
-   * Set/Insert data into the database
-   * @param data - The data to store
-   * @returns The stored data with any additional fields (like auto-generated IDs)
-   */
-  set(data: Data): Promise<Data>;
-
-  /**
-   * Get data from the database based on query
-   * @param query - The query to filter data
-   * @returns Array of matching records
-   */
-  get(query: Query): Promise<Data[]>;
-
-  /**
-   * Update data in the database
-   * @param query - The query to find records to update
-   * @param data - The new data to set
-   * @returns Number of updated records
-   */
-  update(query: Query, data: Data): Promise<number>;
-
-  /**
-   * Delete data from the database
-   * @param query - The query to find records to delete
-   * @returns Number of deleted records
-   */
-  delete(query: Query): Promise<number>;
-
-  /**
-   * Get a single record from the database
-   * @param query - The query to filter data
-   * @returns A single matching record or null
-   */
-  getOne(query: Query): Promise<Data | null>;
-
-  /**
-   * Check if a record exists
-   * @param query - The query to check
-   * @returns True if exists, false otherwise
-   */
-  exists(query: Query): Promise<boolean>;
-
-  /**
-   * Count records matching the query
-   * @param query - The query to filter data
-   * @returns Number of matching records
-   */
-  count(query: Query): Promise<number>;
-  /**
-   * Database type (sql or nosql)
-   * Used to determine schema behavior
+   * The type of database (sql or nosql).
    */
   dbType?: 'sql' | 'nosql';
 
   /**
-   * Optional: Set schema for the driver to use (e.g. for creating SQL tables)
+   * Establishes a connection to the database.
+   */
+  connect(): Promise<void>;
+
+  /**
+   * Closes the database connection.
+   */
+  disconnect(): Promise<void>;
+
+  /**
+   * Checks if the driver is currently connected.
+   */
+  isConnected?(): boolean;
+
+  /**
+   * Creates a new driver instance for a specific table/collection, sharing the same connection.
+   * @param name The name of the table or collection
+   */
+  table?(name: string): IDriver;
+
+  /**
+   * Inserts a new record into the database.
+   * @param data The data to insert
+   */
+  set(data: Data): Promise<Data>;
+
+  /**
+   * Retrieves records matching the query.
+   * @param query Filter criteria
+   */
+  get(query: Query): Promise<Data[]>;
+
+  /**
+   * Updates records matching the query.
+   * @param query Filter criteria
+   * @param data Data to update
+   */
+  update(query: Query, data: Data): Promise<number>;
+
+  /**
+   * Deletes records matching the query.
+   * @param query Filter criteria
+   */
+  delete(query: Query): Promise<number>;
+
+  /**
+   * Retrieves a single record matching the query.
+   * @param query Filter criteria
+   */
+  getOne(query: Query): Promise<Data | null>;
+
+  /**
+   * Checks if any record matches the query.
+   * @param query Filter criteria
+   */
+  exists(query: Query): Promise<boolean>;
+
+  /**
+   * Counts the number of records matching the query.
+   * @param query Filter criteria
+   */
+  count(query: Query): Promise<number>;
+
+  /**
+   * Sets the schema for the driver (optional support).
+   * @param schema The schema definition
    */
   setSchema?(schema: any): void;
 }

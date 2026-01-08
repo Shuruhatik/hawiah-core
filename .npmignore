@@ -27,3 +27,5 @@ Thumbs.db
 *.tsbuildinfo
 node_modules/
 HAWIAH*.md
+
+test-*

@@ -1,4 +1,5 @@
 export { Hawiah } from './Hawiah';
+export { HawiahNext } from './HawiahNext';
 
 export { IDriver, Query, Data } from './interfaces/IDriver';
 

@@ -7,24 +7,74 @@ import DataLoader from 'dataloader';
  * Designed to be friendly and easy to use.
  */
 export class Hawiah {
-  private driver: IDriver;
-  private isConnected: boolean = false;
-  private relations: Map<string, RelationConfig> = new Map();
-  private loaders: Map<string, DataLoader<any, any>> = new Map();
-  private schema?: Schema;
+  protected driver: IDriver;
+  protected isConnected: boolean = false;
+  protected relations: Map<string, RelationConfig> = new Map();
+  protected loaders: Map<string, DataLoader<any, any>> = new Map();
+  protected schema?: Schema;
+  public static readonly IGNORE_KEYS = new Set(['collectionName', 'tableName', 'collection', 'table', 'connectionKey']);
+  private static readonly driversPool: Map<string, IDriver> = new Map();
+  private static readonly connectionPromises: Map<string | IDriver, Promise<void>> = new Map();
+
+  private connectionKey?: string;
+
+  /**
+   * Generates a unique fingerprint for a connection setup.
+   */
+  public static getPoolKey(driver: any, config: any): string {
+    let cKey = config.connectionKey;
+    if (cKey) return cKey;
+
+    cKey = typeof driver === 'function' ? driver.name : (driver.constructor?.name || 'UnknownDriver');
+    for (const key in config) {
+      if (!Hawiah.IGNORE_KEYS.has(key)) {
+        const val = config[key];
+        if (val !== null && typeof val !== 'object') {
+          cKey += `|${key}:${val}`;
+        } else if (val !== null) {
+          cKey += `|${key}:${JSON.stringify(val)}`;
+        }
+      }
+    }
+    return cKey;
+  }
 
   /**
    * Creates a new Hawiah instance.
    * @param options - Configuration options
-   * @param options.driver - The database driver to use
+   * @param options.driver - The database driver instance OR Driver Class for auto-pooling
+   * @param options.config - Configuration for the driver if passing a Class
    * @param options.schema - Optional schema definition
    */
-  constructor(options: { driver: IDriver, schema?: Schema | SchemaDefinition }) {
-    this.driver = options.driver;
+  constructor(options: {
+    driver: IDriver | (new (config: any) => IDriver),
+    config?: any,
+    schema?: Schema | SchemaDefinition
+  }) {
+    if (typeof options.driver === 'function') {
+      const config = options.config || {};
+      const cKey = Hawiah.getPoolKey(options.driver, config);
+      this.connectionKey = cKey;
+
+      if (Hawiah.driversPool.has(cKey)) {
+        const rootDriver = Hawiah.driversPool.get(cKey)!;
+        const tableName = config.collectionName || config.tableName || config.collection || config.table || 'default';
+        this.driver = rootDriver.table ? rootDriver.table(tableName) : rootDriver;
+
+        if (this.driver.isConnected && this.driver.isConnected()) {
+          this.isConnected = true;
+        }
+      } else {
+        this.driver = new options.driver(config);
+        Hawiah.driversPool.set(cKey, this.driver);
+      }
+    } else {
+      this.driver = options.driver as IDriver;
+    }
+
     if (options.schema) {
       this.schema = options.schema instanceof Schema ? options.schema : new Schema(options.schema);
 
-      // Pass the schema to the driver if it supports it (for SQL drivers to build tables)
       if (this.driver.setSchema && this.schema) {
         this.driver.setSchema(this.schema);
       }
@@ -38,7 +88,24 @@ export class Hawiah {
     if (this.isConnected) {
       return;
     }
-    await this.driver.connect();
+
+    const poolKey = this.connectionKey || this.driver;
+    let connectionPromise = Hawiah.connectionPromises.get(poolKey);
+
+    if (!connectionPromise) {
+      if (this.driver.isConnected && this.driver.isConnected()) {
+        this.isConnected = true;
+        return;
+      }
+
+      connectionPromise = (async () => {
+        await this.driver.connect();
+      })();
+
+      Hawiah.connectionPromises.set(poolKey, connectionPromise);
+    }
+
+    await connectionPromise;
     this.isConnected = true;
   }
 
@@ -164,15 +231,10 @@ export class Hawiah {
     this.ensureConnected();
     const existing = await this.driver.getOne(query);
     if (existing) {
-      // Update: validate partial
       const validated = this.validateData(data, true);
       await this.driver.update(query, validated);
       return { ...existing, ...validated };
     } else {
-      // Insert: validate full (merging query + data for validation context if needed, but data is the main payload)
-      // Usually save assumes query IS the id or unique key, which might not be in 'data'. 
-      // We should validate the combined object or just data? 
-      // Let's validate the combined object since that's what's being set.
       const fullData = { ...query, ...data };
       const validated = this.validateData(fullData);
       return await this.driver.set(validated);
@@ -437,7 +499,6 @@ export class Hawiah {
     }
     const currentValue = Number(record[field]) || 0;
     const newValue = currentValue + amount;
-    // Use this.update to ensure validation
     await this.update(query, { [field]: newValue });
     return newValue;
   }
@@ -471,7 +532,7 @@ export class Hawiah {
         record[field] = [];
       }
       record[field].push(value);
-      const validated = this.validateData(record, false); // Full validation since we have full record
+      const validated = this.validateData(record, false);
       await this.driver.update(query, validated);
       count++;
     }
@@ -583,7 +644,6 @@ export class Hawiah {
     for (const record of records) {
       if (field in record) {
         delete record[field];
-        // Full validation ensures we didn't delete a required field
         const validated = this.validateData(record, false);
         await this.driver.update(query, validated);
         count++;
@@ -698,6 +758,7 @@ export class Hawiah {
     this.relations.set(name, { target, localKey, foreignKey, type });
     return this;
   }
+
 
   /**
    * Get records with populated relationships

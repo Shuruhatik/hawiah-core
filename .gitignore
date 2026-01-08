@@ -35,6 +35,6 @@ test/
 # Misc
 *.tsbuildinfo
 
-
+test-*
 examples/
 HAWIAH*.md

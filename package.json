@@ -42,7 +42,9 @@
     "url": "https://github.com/Shuruhatik/hawiah-core/issues"
   },
   "dependencies": {
-    "dataloader": "^2.2.3"
+    "@hawiah/mongo": "^0.1.2",
+    "dataloader": "^2.2.3",
+    "mongodb": "^7.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
