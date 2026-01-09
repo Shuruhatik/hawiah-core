@@ -27,13 +27,10 @@ export class Hawiah {
 
     cKey = typeof driver === 'function' ? driver.name : (driver.constructor?.name || 'UnknownDriver');
 
-    // Check if the driver supports table switching
     const driverClass = typeof driver === 'function' ? driver : driver.constructor;
     const supportsTable = typeof driverClass.prototype?.table === 'function' ||
       (typeof driver === 'object' && typeof driver.table === 'function');
 
-    // If driver supports table switching, we use the standard IGNORE_KEYS (ignoring collection names)
-    // If NOT, we must include collection names in the key to prevent incorrect driver reuse
     const ignoreKeys = supportsTable
       ? Hawiah.IGNORE_KEYS
       : new Set([...Hawiah.IGNORE_KEYS].filter(k => !['collectionName', 'tableName', 'collection', 'table'].includes(k)));
@@ -44,7 +41,7 @@ export class Hawiah {
         if (val !== null && typeof val !== 'object') {
           cKey += `|${key}:${val}`;
         } else if (val !== null) {
-          cKey += `|${key}:${JSON.stringify(val)}`; // Simplistic optimization
+          cKey += `|${key}:${JSON.stringify(val)}`;
         }
       }
     }

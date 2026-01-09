@@ -79,18 +79,15 @@ export class Schema {
 
             let value = validatedData[key];
 
-            // Apply default value if missing and not in partial mode
             if (!isPartial && value === undefined && rule.default !== undefined) {
                 value = rule.default;
                 validatedData[key] = value;
             }
 
-            // Check required fields
             if (!isPartial && rule.required && (value === undefined || value === null)) {
                 throw new Error(`Validation Error: Field "${key}" is required.`);
             }
 
-            // Validate Type
             if (value !== undefined && value !== null && rule.type !== 'any') {
                 if (!this.checkType(value, rule.type)) {
                     throw new Error(`Validation Error: Field "${key}" expected type ${rule.type}.`);
